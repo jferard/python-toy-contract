@@ -38,12 +38,14 @@ Usage:
 
             <body of the function>
     
-# An Eiffel version of the example
+
+# Running the tests
+## An Eiffel version of the example
 Bonus: I wrote an Eiffel version of the example. I'm far from being an Eiffel 
 expert, hence the code is probably clumsy. Please fill an issue if you know 
 how to improve the code.
 
-# Running the tests
+## Let's go
 To run the tests of the Python version, you have to type:
 
     python-toy-contract$ python3.7 -m pytest
@@ -55,3 +57,6 @@ To run the test of the Eiffel version:
     python-toy-contract$ popd eiffel/
     
 the Python tests pass, because of `assertRaises` tests. The Eiffel tests fail.
+
+# TODO
+Explain the code.    
