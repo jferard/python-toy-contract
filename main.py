@@ -23,9 +23,15 @@ from dataclasses import dataclass
 from typing import (Callable, Sequence, Mapping, TypeVar, Generic, Optional,
                     Any, Iterable)
 from copy import deepcopy
+import logging
 
 T = TypeVar('T')
 OC = Optional[Callable]
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger("Python Toy Contract")
+logger.setLevel(logging.DEBUG)
+logger.debug("Logger on.")
 
 
 @dataclass
@@ -59,17 +65,49 @@ class _MethodInfoFactory:
         self._methods = methods
 
     def create(self):
-        requires = self._extract_assertions("__require__")
-        ensures = self._extract_assertions("__ensure__")
+        requires = self._extract_assertions("__require__", "__require_else__")
+        ensures = self._extract_assertions("__ensure__", "__ensure_then__")
         return MethodInfo(self._name, self._method, requires, ensures)
 
-    def _extract_assertions(self, assertion_name: str
+    def _extract_assertions(self, assertion_name: str,
+                            child_assertion_name: str
                             ) -> Sequence[Localized[Callable]]:
-        localized_assertions = [Localized(
-            value=self._find_nested_method(node.value, assertion_name),
-            origin=node.origin
-        ) for node in self._methods]
-        return [la for la in localized_assertions if la]
+        logger.debug(("...Extract assertions `%s` and `%s` "
+                      "from methods named `%s`"),
+                     assertion_name, child_assertion_name, self._name)
+        localized_assertions = []
+        it = iter(reversed(self._methods))
+        for node in it:
+            assertion_method = self._find_nested_method(node.value,
+                                                        assertion_name)
+            if assertion_method is None:
+                child_method = self._find_nested_method(node.value,
+                                                        child_assertion_name)
+                assert not child_method, (
+                    f"Missing {assertion_name} in {node.origin}")
+            else:
+                localized_assertions.append(Localized(
+                    value=assertion_method,
+                    origin=node.origin
+                ))
+                break
+
+        for node in it:
+            child_assertion_method = self._find_nested_method(
+                node.value, child_assertion_name)
+            if child_assertion_method is None:
+                parent_method = self._find_nested_method(node.value,
+                                                         assertion_name)
+                assert not parent_method, (
+                    f"Use {child_assertion_name} instead of "
+                    f"{assertion_name} in {node.origin}")
+            else:
+                localized_assertions.append(Localized(
+                    value=child_assertion_method,
+                    origin=node.origin
+                ))
+
+        return localized_assertions
 
     @staticmethod
     def _find_nested_method(method: OC, nested_name: str) -> OC:
@@ -78,7 +116,8 @@ class _MethodInfoFactory:
         consts = method.__code__.co_consts
         for item in consts:
             if isinstance(item, CodeType) and item.co_name == nested_name:
-                print(f"Found assertion {nested_name} in {method}")
+                logger.debug(f"....Found assertion %s in %s", nested_name,
+                             method)
                 return FunctionType(item, globals())
 
         return None
@@ -91,7 +130,6 @@ class ClassContract:
 
     @staticmethod
     def from_class(cls: type) -> "ClassContract":
-        print(f"from class {cls}")
         return _ClassContractFactory(cls).create()
 
 
@@ -100,16 +138,24 @@ class _ClassContractFactory:
         self._cls = cls
 
     def create(self) -> ClassContract:
-        print(f"Analyse class hierarchy of {self._cls}")
+        logger.debug(f".Analyse class hierarchy of %s", self._cls)
+        logger.debug(f"..Extract invariants %s", self._cls)
         invariants = _ClassContractFactory._find_invariants(self._cls)
+        logger.debug(f"..Extract pre/post conditions %s", self._cls)
         method_info_by_name = self._find_method_info_by_name()
         return ClassContract(invariants, method_info_by_name)
 
     @staticmethod
     def _find_invariants(cls: type) -> Sequence[Localized[Callable]]:
-        invariants = [Localized(value=_ClassContractFactory._find_invariant(c),
-                                origin=c) for c in cls.__mro__[:-1]]
-        return [inv for inv in invariants if inv]
+        invariants = []
+        for c in cls.__mro__[:-1]:
+            invariant = _ClassContractFactory._find_invariant(c)
+            if invariant:
+                logger.debug("...Found invariant in `%s`", c)
+                invariants.append(
+                    Localized(value=invariant,
+                              origin=c))
+        return invariants
 
     @staticmethod
     def _find_invariant(c: type) -> OC:
@@ -124,9 +170,10 @@ class _ClassContractFactory:
 
     def _find_method_info_by_name(self) -> Mapping[str, MethodInfo]:
         method_by_name = self._find_method_by_name()
+        logger.debug(f"...Public methods by name: %s", method_by_name)
         methods_by_name = _ClassContractFactory._find_methods_by_name(
             method_by_name, self._cls)
-        print(f"methods_by_name: {methods_by_name}")
+        logger.debug(f"...Sequence of methods by name: %s", methods_by_name)
         return {name: MethodInfo.from_method(name, method,
                                              methods_by_name[name])
                 for name, method in method_by_name.items()}
@@ -169,28 +216,30 @@ class _ClassContractFactory:
         :return:
         """
         localized_methods = (
-        Localized(value=_ClassContractFactory.get_attr(c, name),
-                  origin=c) for c in cls.__mro__[1:])
+            Localized(value=_ClassContractFactory.get_attr(c, name),
+                      origin=c) for c in cls.__mro__[1:])
         localized_method = next((lm for lm in localized_methods if lm.value
                                  is not None), None)
         if localized_method is None:
             return []
         else:
-            return [
-                       localized_method] + _ClassContractFactory._find_parent_methods(
+            return [localized_method
+                    ] + _ClassContractFactory._find_parent_methods(
                 localized_method.origin, name)
 
 
 class Contract(ABCMeta):
     def __new__(mcs, name, bases, dict):
-        print(f"Wrap {name}")
+        logger.info(f"Create contracted/relaxed for class `{name}`")
+        logger.debug(f"Create relaxed version")
         relaxed_bases = tuple([getattr(b, '__relaxed__', b) for b in bases])
-        relaxed_D = ABCMeta.__new__(mcs, name, relaxed_bases, dict)
-        print(f"-> Create relaxed version {relaxed_D}")
+        relaxed_D = ABCMeta.__new__(mcs, "relaxed_" + name, relaxed_bases, dict)
+        logger.debug(f"Relaxed version created: %s", relaxed_D)
+        logger.debug(f"Create contracted version")
         contracted_D = Contractor(ABCMeta.__new__(
             mcs, "_contracted_" + name, bases,
             {**dict, '__relaxed__': relaxed_D})).wrap()
-        print(f"-> Create contracted version {contracted_D}")
+        logger.debug(f"Contracted version created: %s", contracted_D)
         relaxed_D.__contracted__ = contracted_D
 
         return contracted_D
@@ -201,12 +250,11 @@ class Contractor:
         self._cls = cls
 
     def wrap(self):
-        print(f"cls = {self._cls}, {self._cls.__relaxed__}")
         class_info = ClassContract.from_class(getattr(self._cls, '__relaxed__',
                                                       self._cls))
+        logger.debug("..Wrap methods in contracted class")
         for name, method_info in class_info.method_info_by_name.items():
-            print(
-                f"->    Wrap method {self._cls.__name__}.{name}")
+            logger.debug("...Wrap method %s in %s", name, self._cls.__name__)
             setattr(self._cls, name,
                     ContractedMethodFactory(class_info.invariants,
                                             method_info).create())
@@ -223,18 +271,25 @@ class ContractedMethodFactory:
         method = self._method_info.method
 
         def func(slf, *args, **kwargs):
-            print(
-                f"contracted call {slf.__class__.__name__}.{self._method_info.name}({slf}, {args}, {kwargs})")
-            slf.__class__ = slf.__relaxed__
-            old = deepcopy(slf)
-            self.check_invariants(slf)
-            self.check_requires(slf, *args, **kwargs)
-            print(
-                f"core call {slf.__class__.__name__}.{self._method_info.name}")
-            ret = method(slf, *args, **kwargs)
-            self.check_ensures(slf, ret, old, *args, **kwargs)
-            self.check_invariants(slf)
-            slf.__class__ = slf.__contracted__
+            try:
+                logger.info(
+                    f"Contracted call %s.%s(%s, %s, %s)",
+                    slf.__class__.__name__, self._method_info.name, slf, args,
+                    kwargs)
+                slf.__class__ = slf.__relaxed__
+                old = deepcopy(slf)
+                self.check_invariants(slf)
+                self.check_requires(slf, *args, **kwargs)
+                logger.debug(
+                    f".Core call %s.%s",
+                    slf.__class__.__name__, self._method_info.name)
+                ret = method(slf, *args, **kwargs)
+                self.check_ensures(slf, ret, old, *args, **kwargs)
+                self.check_invariants(slf)
+                slf.__class__ = slf.__contracted__
+            except AssertionError as e:
+                logger.exception("Assertion failed")
+                raise
             return ret
 
         return func
@@ -242,6 +297,7 @@ class ContractedMethodFactory:
     @staticmethod
     def check(method: OC, *args, **kwargs):
         if method is None:
+            assert False
             return
         else:
             method(*args, **kwargs)
@@ -255,10 +311,15 @@ class ContractedMethodFactory:
         if not self._invariants:
             return
 
-        print(f"check invariants of {slf}: {self._invariants}")
+        logger.debug(f".Check invariants of %s: %s", slf, self._invariants)
         for invariant in reversed(self._invariants):
-            ContractedMethodFactory.check(invariant.value, slf)
-            print(f"   {invariant} ok")
+            try:
+                ContractedMethodFactory.check(invariant.value, slf)
+            except AssertionError as e:
+                logger.error("..Invariant %s: NOT OK", invariant)
+                raise
+            else:
+                logger.debug("..Invariant %s: ok", invariant)
 
     def check_requires(self, slf: Any, *args, **kwargs):
         """
@@ -272,17 +333,17 @@ class ContractedMethodFactory:
         if not self._method_info.requires:
             return
 
-        print(
-            f"check requires {self._method_info.requires}({slf}, {args}, {kwargs})... ")
+        logger.debug(".Check requires %s(%s, %s, %s)",
+                     self._method_info.requires, slf, args, kwargs)
         for require in self._method_info.requires:
             try:
                 ContractedMethodFactory.check(require.value, slf, *args,
                                               **kwargs)
             except AssertionError as e:
                 error = e
-                print(f"   {require} not ok")
+                logger.error(f"..Require %s: NOT OK", require)
             else:
-                print(f"   {require} ok")
+                logger.debug(f"..Require %s: ok", require)
                 return
 
         raise error
@@ -291,10 +352,15 @@ class ContractedMethodFactory:
         if not self._method_info.ensures:
             return
 
-        print(
-            f"check_ensures {self._method_info.ensures}"
-            f"({slf}, {ret}, {old}, {args}, {kwargs})...")
+        logger.debug(".Check ensures %s(%s, %s, %s, %s, %s)",
+                     self._method_info.requires, slf, ret, old, args, kwargs)
         for ensure in reversed(self._method_info.ensures):
-            ContractedMethodFactory.check(ensure.value, slf, ret, old, *args,
-                                          **kwargs)
-            print(f"   {ensure} ok")
+            try:
+                ContractedMethodFactory.check(ensure.value, slf, ret, old,
+                                              *args,
+                                              **kwargs)
+            except AssertionError as e:
+                logger.error("..Ensure %s: NOT OK", ensure)
+                raise
+            else:
+                logger.debug("..Ensure %s: ok", ensure)
