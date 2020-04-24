@@ -1,4 +1,4 @@
-A toy project. Endeavour to use dynamic nature of Python to implement 
+A toy project. Attempt to use dynamic nature of Python to implement 
 programming by contract.
 
 # References
