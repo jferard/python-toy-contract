@@ -1,0 +1,6 @@
+venv
+.idea
+old
+EIFGENs
+.pytest_cache/
+__pycache__/
