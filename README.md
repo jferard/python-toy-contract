@@ -234,4 +234,17 @@ Don't get me wrong, I would like to have real contracts in Python, Kotlin,
 Java, Rust, ..., but they didn't seem a panacea to languages designers.
 
 ## Liskov substitution principle
-TODO.
+Remember the LSP?
+
+> Subtype Requirement: Let *ϕ(x)* be a property provable about objects *x* 
+of type *T*. Then *ϕ(y)* should be true for objects *y* of type *S* where *S* is a subtype of *T*. 
+
+Basically, in a given program, I should be able to replace a instance of a 
+class by an instance of any subclass of this class. If it doesn't work the 
+subclass is *not* a subtype, because it doesn't follow the semantic of the
+parent type, just it's syntax. In other word, subclassing is about method 
+signatures, while subtyping is about method behavior.
+
+With design by contract, assertions are part of the signature that should 
+carry at least a part of the semantic. Thus, subtyping should be closer 
+to subclassing.
