@@ -32,13 +32,44 @@ Hence I focused on class contracts, since they are the most interesting:
 invariants, precondtions and postconditions should be inherited from a parent
 class if they exist.
 
-# Running the tests
 ## An Eiffel version of the example
 Bonus: I wrote an Eiffel version of the example. I'm far from being an Eiffel 
 expert, hence the code is probably clumsy. Please fill an issue if you know 
 how to improve the code.
 
-## Let's go
+# Usage
+Assertions are defined at class level:
+
+    class X(Contract):
+        def __invariant__(self):
+            assert <my test>, <msg>
+
+        def func(self, x, y, z):
+            def __require__(self, x, y, z):
+                assert <my test>, <msg>
+                
+            def __ensure__(self, ret, old, x, y, z):
+                assert <my test>, <msg>
+
+            <body of the function>
+
+When deriving the class, invariants and postconditions may be strenghtened, 
+but preconditions may only be weakened:
+
+    class Y(X):
+        def __invariant__(self):
+            assert <my test>, <msg>
+
+        def func(self, x, y, z):
+            def __require_else__(self, x, y, z):
+                assert <my test>, <msg>
+                
+            def __ensure_then__(self, ret, old, x, y, z):
+                assert <my test>, <msg>
+
+            <body of the function, don't forget too call the super class>
+
+# Running the tests
 To run the tests of the Python version, you have to type:
 
     python-toy-contract$ python3.7 -m pytest
@@ -52,27 +83,65 @@ To run the test of the Eiffel version:
 the Python tests pass, because of `assertRaises` tests. The Eiffel tests fail.
 
 # Design
+## Assertions using `assert` statement 
 Unlike other libraries:
- 
+
 * assertions are not coded as lambdas or strings, but using plain old 
 `assert` statements.
 * I did not use decorators but a method (for invariants) and nested 
 functions (for pre and post conditions). 
 
-These functions are executed before and after the body of the function:
+These functions are executed before and after the body of the function. If an
+assertions fails, you have the whole stacktrace.
 
-    class X(metaclass=Contract):
-        def __invariant__(self):
-            assert <my test>, <msg>
+## When assertions are disabled
+Contracts are enabled only if assertions are enabled. This is true by design,
+but there is a shortcut with virtually no performance penaly: 
+`ContractMeta.__new__` simply does not create a version of the class with 
+contracts. 
 
-        def func(self, x, y, z):
-            def __require__(self, x, y, z):
-                assert <my test>, <msg>
-                
-            def __ensure__(self, ret, old, x, y, z):
-                assert <my test>, <msg>
+---
 
-            <body of the function>
+Unlike many other languages, but like Eiffel assertions, Python assertions are
+enabled by default. They are disabled [when the command line option `-O` is set
+](https://docs.python.org/3/reference/simple_stmts.html#the-assert-statement).
+This can be checked with the `__debug__` constant:
+
+    python/python-toy-contract$ python3.7
+    >>> __debug__
+    True
+    >>> assert False
+    Traceback (most recent call last):
+    ...
+    AssertionError
+
+But:
+
+    jferard@jferard-Z170XP-SLI:~/prog/python/python-toy-contract$ python3.7 -O
+    Python 3.7.5 (default, Nov  7 2019, 10:50:52) 
+    [GCC 8.3.0] on linux
+    Type "help", "copyright", "credits" or "license" for more information.
+    >>> __debug__
+    False
+    >>> assert False
+    >>> # nothing
+
+## Non paranoid mode
+The default mode is the "paranoid mode": invariants are checked after 
+`__init__` (is the initial state ok) and then *before* and *after* each 
+function call (along with pre or post conditions). You could imagine that 
+checking the invariant *after* a function call is sufficient, but it's very
+easy to alter manually the state of an object:
+
+> We don't use the term "private" here, since no attribute is really 
+> private in Python -- [*PEP 8 - Designing for Inheritance*](https://www.python.org/dev/peps/pep-0008/#designing-for-inheritance)  
+
+Though, there is a "non paranoid mode". Invariants are checked only after 
+method calls:
+
+    class X(Contract):
+        __paranoid__ = False
+
 
 # Implementation
 There are some challenges:
@@ -132,4 +201,37 @@ Toy Contract returns the violation of the precondition in the most generic
 class.
 
 # Some thoughts on programming by contract
+## What went wrong?
+The first version of Eiffel was released in 1986, more than 30 years ago. 
+Design by contract is, in my mind, a genius idea. Most 
+languages have only a poor, defaced version of contracts, that is the `assert` 
+keyword. So what went wrong?
+
+Frankly, I don't know, but the "Do you eat your own dog food" is enlightening:
+I read carefully the code, thinking of invariants, pre or post conditions, and
+the conclusion is unequivocal: the only place where I need a state is, when
+looking for assertions, I have to ensure that one and only `__require__`
+preceeds one or many `__require_else__` (same for `__require__` and 
+`__ensure_then__`). And three `assert` statements seemed enough.
+
+If I can draw a conclusion from such a small example, it would be the 
+following.
+
+B. Meyer insists on correctness of programs. But that's not always 
+the primary concern of program makers. It may be performance (some games), 
+cost, ease of development, ... But even if correctness is the primary goal, 
+correctness cannot always be expressed using contracts:
+
+* some classes are only disguised structures (you know, those 
+classes that have only getters and setters), helper classes like factories or 
+builders (no real state).
+* some classes are too dependent of a global state (they need integration 
+tests, not invariants).
+* some classes do not belong to a hierarchy, and you don't need to inherit
+pre/post conditions and invariants: `assert` is enough.
+
+Don't get me wrong, I would like to have real contracts in Python, Kotlin, 
+Java, Rust, ..., but they didn't seem a panacea to languages designers.
+
+## Liskov substitution principle
 TODO.
