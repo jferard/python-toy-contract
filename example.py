@@ -80,7 +80,6 @@ class WrongStackImpl(Stack):
     def __init__(self):
         self._arr = []
         self._size = 0
-        self.__skip_assertions__ = False
 
     def push(self, e):
         self._arr.append(e)

@@ -19,7 +19,7 @@ Python Toy Contract.
 
 import unittest
 from example import EvenStackImpl, StackImpl, WrongStackImpl
-from main import ContractMeta
+from main import ContractMeta, Contract
 
 
 class ExampleTestCase(unittest.TestCase):
@@ -111,6 +111,52 @@ class TestClasses(unittest.TestCase):
 
                     def __ensure_then__(self):
                         pass
+
+    def test_init(self):
+        class A(Contract):
+            def __invariant__(self):
+                assert self.x > 0, "Variable x should be positive"
+
+            def __init__(self):
+                self.x = -1
+
+        with self.assertRaisesRegex(AssertionError,
+                                    "Variable x should be positive"):
+            A()
+
+    def test_no_paranoid(self):
+        class A(Contract):
+            __paranoid__ = False
+
+            def __invariant__(self):
+                assert self._x > 0, "Variable x should be positive"
+
+            def __init__(self):
+                self._x = 1
+
+            def inc(self):
+                self._x += 1
+
+        a = A()
+        a._x = 0  # break the invariant
+        a.inc()   # still ok
+
+    def test_paranoid(self):
+        class A(Contract):
+            def __invariant__(self):
+                assert self._x > 0, "Variable x should be positive"
+
+            def __init__(self):
+                self._x = 1
+
+            def inc(self):
+                self._x += 1
+
+        a = A()
+        a._x = 0  # break the invariant
+        with self.assertRaisesRegex(AssertionError,
+                                    "Variable x should be positive"):
+            a.inc()
 
 
 if __name__ == '__main__':

@@ -25,7 +25,15 @@ from types import CodeType, FunctionType
 from typing import (Callable, Sequence, Mapping, TypeVar, Generic, Optional,
                     Any, Iterable, List, Tuple, Dict)
 
+_SPECIAL_METHOD_NAMES = {"__delitem__", "__setitem__",
+                         "__iadd__", "__isub__", "__imul__",
+                         "__imatmul__", "__itruediv__",
+                         "__ifloordiv__", "__imod__", "__ipow__",
+                         "__ilshift__", "__irshift__", "__iand__",
+                         "__ixor__", "__ior__"}
+
 # init the logger
+
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("Python Toy Contract")
 logger.setLevel(logging.DEBUG)
@@ -88,77 +96,6 @@ class ClassContract:
         return _ClassContractFactory(cls).create()
 
 
-class _MethodContractFactory:
-    """
-    A factory for MethodContract.
-    """
-    def __init__(self, name: str,
-                 localized_methods: Sequence[Localized[Callable]]):
-        """
-        :param name: name of the method
-        :param localized_methods: the hierarchy of localized_methods and their
-        localizations.
-        """
-        self._name = name
-        self._method = localized_methods[0].value
-        self._localized_methods = localized_methods
-
-    def create(self):
-        """
-        :return: a MethodContract
-        """
-        requires = self._extract_assertions("__require__", "__require_else__")
-        ensures = self._extract_assertions("__ensure__", "__ensure_then__")
-        return MethodContract(self._name, self._method, requires, ensures)
-
-    def _extract_assertions(self, root_assertion_name: str,
-                            children_assertion_name: str
-                            ) -> Sequence[Localized[Callable]]:
-        logger.debug(("...Extract assertions `%s` and `%s` "
-                      "from localized_methods named `%s`"),
-                     root_assertion_name, children_assertion_name, self._name)
-        root_found = False
-        localized_assertions = []
-        for node in reversed(self._localized_methods):
-            method = self._find_nested_assertion(node, root_assertion_name,
-                                                 children_assertion_name,
-                                                 root_found)
-            if method:
-                root_found = True
-                localized_assertions.append(Localized(value=method,
-                                                      origin=node.origin))
-        return localized_assertions
-
-    def _find_nested_assertion(self, node: Localized[Callable],
-                               root_assertion_name: str, children_assertion_name: str,
-                               root_found) -> Optional[Callable]:
-        function_by_name = self._find_nested_method_by_name(node.value)
-        root_assertion_method = function_by_name.get(root_assertion_name, None)
-        child_assertion_method = function_by_name.get(children_assertion_name,
-                                                      None)
-        assert not (root_assertion_method and child_assertion_method), (
-            f"Use either {root_assertion_name} or "
-            f"{children_assertion_name} in {node.origin}")
-        assert not (root_found and root_assertion_method), (
-            f"Use {children_assertion_name} instead of "
-            f"{root_assertion_name} in {node.origin}")
-        assert root_found or not child_assertion_method, (
-            f"Missing {root_assertion_name} in {node.origin}")
-        return root_assertion_method or child_assertion_method
-
-    @staticmethod
-    def _find_nested_method_by_name(method: Callable) -> Mapping[str, Callable]:
-        consts = method.__code__.co_consts
-        ret = {}
-        for item in consts:
-            if isinstance(item, CodeType):
-                logger.debug(f"....Found nested function `%s` in `%s`",
-                             item.co_name, method)
-                ret[item.co_name] = FunctionType(item, globals())
-
-        return ret
-
-
 class _ClassContractFactory:
     def __init__(self, cls: type):
         self._cls = cls
@@ -176,7 +113,7 @@ class _ClassContractFactory:
         invariants = []
         for c in cls.__mro__[:-1]:
             invariant = _ClassContractFactory._get_attr_or_none(c,
-                                                               "__invariant__")
+                                                                "__invariant__")
             if invariant:
                 logger.debug("...Found invariant in `%s`", c)
                 invariants.append(
@@ -210,8 +147,9 @@ class _ClassContractFactory:
 
     def _public_methods(self) -> Iterable[str]:
         for method_name in dir(self._cls):
-            if (not method_name.startswith("_") and
-                    callable(getattr(self._cls, method_name))):
+            if ((not method_name.startswith("_")
+                 or method_name in _SPECIAL_METHOD_NAMES)
+                    and callable(getattr(self._cls, method_name))):
                 yield method_name
 
     @staticmethod
@@ -252,15 +190,89 @@ class _ClassContractFactory:
                 localized_method.origin, name)
 
 
+class _MethodContractFactory:
+    """
+    A factory for MethodContract.
+    """
+
+    def __init__(self, name: str,
+                 localized_methods: Sequence[Localized[Callable]]):
+        """
+        :param name: name of the method
+        :param localized_methods: the hierarchy of localized_methods and their
+        localizations.
+        """
+        self._name = name
+        self._method = localized_methods[0].value
+        self._localized_methods = localized_methods
+
+    def create(self):
+        """
+        :return: a MethodContract
+        """
+        requires = self._extract_assertions("__require__", "__require_else__")
+        ensures = self._extract_assertions("__ensure__", "__ensure_then__")
+        return MethodContract(self._name, self._method, requires, ensures)
+
+    def _extract_assertions(self, root_assertion_name: str,
+                            children_assertion_name: str
+                            ) -> Sequence[Localized[Callable]]:
+        logger.debug(("...Extract assertions `%s` and `%s` "
+                      "from localized_methods named `%s`"),
+                     root_assertion_name, children_assertion_name, self._name)
+        root_found = False
+        localized_assertions = []
+        for node in reversed(self._localized_methods):
+            method = self._find_nested_assertion(node, root_assertion_name,
+                                                 children_assertion_name,
+                                                 root_found)
+            if method:
+                root_found = True
+                localized_assertions.append(Localized(value=method,
+                                                      origin=node.origin))
+        return localized_assertions
+
+    def _find_nested_assertion(self, node: Localized[Callable],
+                               root_assertion_name: str,
+                               children_assertion_name: str,
+                               root_found) -> Optional[Callable]:
+        function_by_name = self._find_nested_method_by_name(node.value)
+        root_assertion_method = function_by_name.get(root_assertion_name, None)
+        child_assertion_method = function_by_name.get(children_assertion_name,
+                                                      None)
+        assert not (root_assertion_method and child_assertion_method), (
+            f"Use either {root_assertion_name} or "
+            f"{children_assertion_name} in {node.origin}")
+        assert not (root_found and root_assertion_method), (
+            f"Use {children_assertion_name} instead of "
+            f"{root_assertion_name} in {node.origin}")
+        assert root_found or not child_assertion_method, (
+            f"Missing {root_assertion_name} in {node.origin}")
+        return root_assertion_method or child_assertion_method
+
+    @staticmethod
+    def _find_nested_method_by_name(method: Callable) -> Mapping[str, Callable]:
+        consts = method.__code__.co_consts
+        ret = {}
+        for item in consts:
+            if isinstance(item, CodeType):
+                logger.debug(f"....Found nested function `%s` in `%s`",
+                             item.co_name, method)
+                ret[item.co_name] = FunctionType(item, globals())
+
+        return ret
+
+
 class ContractMeta(ABCMeta):
     """
     A metaclass for contracts.
     """
+
     def __new__(mcs: type, name: str, bases: Tuple[type], d: Dict[str, Any]):
         if not __debug__ or name == "Contract":
             return type.__new__(mcs, name, bases, d)
-
         logger.info(f"Create contracted/relaxed for class `{name}`")
+        paranoid = d.get("__paranoid__", True)
         logger.debug(f"Create relaxed version")
         relaxed_bases = tuple([getattr(b, '__relaxed__', b) for b in bases])
         relaxed_class = ABCMeta.__new__(mcs, "relaxed_" + name, relaxed_bases,
@@ -269,7 +281,7 @@ class ContractMeta(ABCMeta):
         logger.debug(f"Create contracted version")
         contracted_class = _Contractor(ABCMeta.__new__(
             mcs, "_contracted_" + name, bases,
-            {**d, '__relaxed__': relaxed_class})).wrap()
+            {**d, '__relaxed__': relaxed_class}), paranoid).wrap()
         logger.debug(f"Contracted version created: %s", contracted_class)
         relaxed_class.__contracted__ = contracted_class
 
@@ -287,10 +299,13 @@ class _Contractor:
     """
     A class to add contract check to a class.
     """
-    def __init__(self, cls: type):
+
+    def __init__(self, cls: type, paranoid: bool):
         """
+        :param paranoid:
         :param cls: The class to process
         """
+        self._paranoid = paranoid
         self._cls = cls
 
     def wrap(self) -> type:
@@ -304,19 +319,30 @@ class _Contractor:
             logger.debug("...Wrap method %s in %s", name, self._cls.__name__)
             setattr(self._cls, name,
                     _ContractedMethodFactory(class_info.invariants,
-                                             method_info).create())
+                                             method_info,
+                                             self._paranoid).create())
+
+        def new_init(slf, *args, **kwargs):
+            self._cls.__relaxed__.__init__(slf, *args, **kwargs)
+            _ContractedMethodFactory(class_info.invariants, None,
+                                     self._paranoid).check_invariants(slf)
+
+        self._cls.__init__ = new_init
+
         return self._cls
 
 
 class _ContractedMethodFactory:
     def __init__(self, invariants: Sequence[Localized[Callable]],
-                 method_contract: MethodContract):
+                 method_contract: MethodContract, paranoid: bool):
         """
+        :param paranoid:
         :param invariants: the invariants
         :param method_contract: the contract of the method
         """
         self._invariants = invariants
         self._method_info = method_contract
+        self._paranoid = paranoid
 
     def create(self) -> Callable:
         """
@@ -332,7 +358,8 @@ class _ContractedMethodFactory:
                     kwargs)
                 slf.__class__ = slf.__relaxed__
                 old = deepcopy(slf)
-                self.check_invariants(slf)
+                if self._paranoid:
+                    self.check_invariants(slf)
                 self.check_requires(slf, *args, **kwargs)
                 logger.debug(
                     f".Core call %s.%s",
