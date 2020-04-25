@@ -132,4 +132,4 @@ Toy Contract returns the violation of the precondition in the most generic
 class.
 
 # Some thoughts on programming by contract
-TODO. 
+TODO.

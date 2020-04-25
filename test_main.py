@@ -19,7 +19,7 @@ Python Toy Contract.
 
 import unittest
 from example import EvenStackImpl, StackImpl, WrongStackImpl
-from main import Contract
+from main import ContractMeta
 
 
 class ExampleTestCase(unittest.TestCase):
@@ -48,46 +48,70 @@ class ExampleTestCase(unittest.TestCase):
 
 class TestClasses(unittest.TestCase):
     def test_two_requires(self):
-        class A(metaclass=Contract):
+        class A(metaclass=ContractMeta):
             def f(self):
                 def __require__(self):
                     pass
 
         with self.assertRaisesRegex(AssertionError,
-                               "Use __require_else__ instead of __require__ in"):
-            class B(A, metaclass=Contract):
+                                    "Use __require_else__ instead of __require__ in"):
+            class B(A):
                 def f(self):
                     def __require__(self):
                         pass
 
     def test_no_require(self):
         with self.assertRaisesRegex(AssertionError,
-                               "Missing __require__ in"):
-            class A(metaclass=Contract):
+                                    "Missing __require__ in"):
+            class A(metaclass=ContractMeta):
                 def f(self):
                     def __require_else__(self):
                         pass
 
+    def test_require_and_else(self):
+        with self.assertRaisesRegex(
+                AssertionError,
+                "Use either __require__ or __require_else__ in"):
+            class A(metaclass=ContractMeta):
+                def f(self):
+                    def __require__(self):
+                        pass
+
+                    def __require_else__(self):
+                        pass
+
     def test_two_ensures(self):
-        class A(metaclass=Contract):
+        class A(metaclass=ContractMeta):
             def f(self):
                 def __ensure__(self):
                     pass
 
         with self.assertRaisesRegex(AssertionError,
-                               "Use __ensure_then__ instead of __ensure__ in"):
-            class B(A, metaclass=Contract):
+                                    "Use __ensure_then__ instead of __ensure__ in"):
+            class B(A):
                 def f(self):
                     def __ensure__(self):
                         pass
 
     def test_no_ensure(self):
         with self.assertRaisesRegex(AssertionError,
-                               "Missing __ensure__ in"):
-            class A(metaclass=Contract):
+                                    "Missing __ensure__ in"):
+            class A(metaclass=ContractMeta):
                 def f(self):
                     def __ensure_then__(self):
                         pass
+
+    def test_ensure_and_then(self):
+        with self.assertRaisesRegex(AssertionError,
+                                    "Use either __ensure__ or __ensure_then__ in"):
+            class A(metaclass=ContractMeta):
+                def f(self):
+                    def __ensure__(self):
+                        pass
+
+                    def __ensure_then__(self):
+                        pass
+
 
 if __name__ == '__main__':
     unittest.main()

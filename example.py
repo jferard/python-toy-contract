@@ -21,7 +21,7 @@ from abc import abstractmethod
 from main import Contract
 
 
-class Stack(metaclass=Contract):
+class Stack(Contract):
     def __invariant__(self):
         assert self.size() >= 0, f"Size should be positive but is {self.size()}"
 
@@ -56,7 +56,7 @@ class Stack(metaclass=Contract):
         pass
 
 
-class StackImpl(Stack, metaclass=Contract):
+class StackImpl(Stack):
     def __init__(self):
         self._arr = []
         self._size = 0
@@ -76,7 +76,7 @@ class StackImpl(Stack, metaclass=Contract):
         return self._size
 
 
-class WrongStackImpl(Stack, metaclass=Contract):
+class WrongStackImpl(Stack):
     def __init__(self):
         self._arr = []
         self._size = 0
@@ -97,12 +97,12 @@ class WrongStackImpl(Stack, metaclass=Contract):
         return self._size
 
 
-class EvenStack(metaclass=Contract):
+class EvenStack(Contract):
     def __invariant__(self):
         assert self.size() == 0 or self.top() % 2 == 0, f"Top should be even but was {self.top()}"
 
 
-class EvenStackImpl(StackImpl, EvenStack, metaclass=Contract):
+class EvenStackImpl(StackImpl, EvenStack):
     pass
 
 
