@@ -40,7 +40,6 @@ logger.setLevel(logging.DEBUG)
 logger.debug("Logger on.")
 
 T = TypeVar('T')
-OC = Optional[Callable]
 
 
 @dataclass
@@ -83,7 +82,7 @@ class ClassContract:
     """
     The contract for a class: the invariants and the contracts for each localized_methods.
     """
-    invariants: Sequence[Localized[OC]]
+    invariants: Sequence[Localized[Callable]]
     method_info_by_name: Mapping[str, MethodContract]
 
     @staticmethod
