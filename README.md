@@ -212,7 +212,9 @@ I read carefully the code, thinking of invariants, pre or post conditions, and
 the conclusion is unequivocal: the only place where I need a state is, when
 looking for assertions, I have to ensure that one and only `__require__`
 preceeds one or many `__require_else__` (same for `__require__` and 
-`__ensure_then__`). And three `assert` statements seemed enough.
+`__ensure_then__`). And three `assert` statements seemed enough, because
+the real question here is: do I have all the assertions? and not: are these 
+assertions in the right order?
 
 If I can draw a conclusion from such a small example, it would be the 
 following.
@@ -225,8 +227,8 @@ correctness cannot always be expressed using contracts:
 * some classes are only disguised structures (you know, those 
 classes that have only getters and setters), helper classes like factories or 
 builders (no real state).
-* some classes are too dependent of a global state (they need integration 
-tests, not invariants).
+* some classes are too dependent of a global state (they need 
+tests, not invariants). Think of the classes that process an input.
 * some classes do not belong to a hierarchy, and you don't need to inherit
 pre/post conditions and invariants: `assert` is enough.
 
