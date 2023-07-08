@@ -1,7 +1,9 @@
 venv
 .idea
 .ruff_cache
-old
 EIFGENs
 .pytest_cache/
 __pycache__/
+
+.coverage
+coverage.xml
