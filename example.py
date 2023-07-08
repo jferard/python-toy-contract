@@ -98,7 +98,8 @@ class WrongStackImpl(Stack):
 
 class EvenStack(Contract):
     def __invariant__(self):
-        assert self.size() == 0 or self.top() % 2 == 0, f"Top should be even but was {self.top()}"
+        msg = f"Top should be even but was {self.top()}"
+        assert self.size() == 0 or self.top() % 2 == 0, msg
 
 
 class EvenStackImpl(StackImpl, EvenStack):

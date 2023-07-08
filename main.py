@@ -80,7 +80,8 @@ class MethodContract:
 @dataclass
 class ClassContract:
     """
-    The contract for a class: the invariants and the contracts for each localized_methods.
+    The contract for a class: the invariants and the contracts
+     for each localized_methods.
     """
     invariants: Sequence[Localized[Callable]]
     method_info_by_name: Mapping[str, MethodContract]
@@ -100,10 +101,10 @@ class _ClassContractFactory:
         self._cls = cls
 
     def create(self) -> ClassContract:
-        logger.debug(f".Analyse class hierarchy of %s", self._cls)
-        logger.debug(f"..Extract invariants %s", self._cls)
+        logger.debug(".Analyse class hierarchy of %s", self._cls)
+        logger.debug("..Extract invariants %s", self._cls)
         invariants = _ClassContractFactory._find_invariants(self._cls)
-        logger.debug(f"..Extract pre/post conditions %s", self._cls)
+        logger.debug("..Extract pre/post conditions %s", self._cls)
         method_info_by_name = self._find_method_info_by_name()
         return ClassContract(invariants, method_info_by_name)
 
@@ -124,15 +125,15 @@ class _ClassContractFactory:
     def _get_attr_or_none(c: type, attr: str) -> Optional[Any]:
         try:
             return c.__getattribute__(c, attr)
-        except AttributeError as e:
+        except AttributeError:
             return None
 
     def _find_method_info_by_name(self) -> Mapping[str, MethodContract]:
         method_by_name = self._find_method_by_name()
-        logger.debug(f"...Public localized_methods by name: %s", method_by_name)
+        logger.debug("...Public localized_methods by name: %s", method_by_name)
         methods_by_name = _ClassContractFactory._find_methods_by_name(
             method_by_name, self._cls)
-        logger.debug(f"...Sequence of localized_methods by name: %s",
+        logger.debug("...Sequence of localized_methods by name: %s",
                      methods_by_name)
         return {name: MethodContract.from_methods(name, methods_by_name[name])
                 for name, method in method_by_name.items()}
@@ -255,7 +256,7 @@ class _MethodContractFactory:
         ret = {}
         for item in consts:
             if isinstance(item, CodeType):
-                logger.debug(f"....Found nested function `%s` in `%s`",
+                logger.debug("....Found nested function `%s` in `%s`",
                              item.co_name, method)
                 ret[item.co_name] = FunctionType(item, globals())
 
@@ -272,16 +273,16 @@ class ContractMeta(ABCMeta):
             return type.__new__(mcs, name, bases, d)
         logger.info(f"Create contracted/relaxed for class `{name}`")
         paranoid = d.get("__paranoid__", True)
-        logger.debug(f"Create relaxed version")
+        logger.debug("Create relaxed version")
         relaxed_bases = tuple([getattr(b, '__relaxed__', b) for b in bases])
         relaxed_class = ABCMeta.__new__(mcs, "relaxed_" + name, relaxed_bases,
                                         d)
-        logger.debug(f"Relaxed version created: %s", relaxed_class)
-        logger.debug(f"Create contracted version")
+        logger.debug("Relaxed version created: %s", relaxed_class)
+        logger.debug("Create contracted version")
         contracted_class = _Contractor(ABCMeta.__new__(
             mcs, "_contracted_" + name, bases,
             {**d, '__relaxed__': relaxed_class}), paranoid).wrap()
-        logger.debug(f"Contracted version created: %s", contracted_class)
+        logger.debug("Contracted version created: %s", contracted_class)
         relaxed_class.__contracted__ = contracted_class
 
         return contracted_class
@@ -352,7 +353,7 @@ class _ContractedMethodFactory:
         def func(slf, *args, **kwargs):
             try:
                 logger.info(
-                    f"Contracted call %s.%s(%s, %s, %s)",
+                    "Contracted call %s.%s(%s, %s, %s)",
                     slf.__class__.__name__, self._method_info.name, slf, args,
                     kwargs)
                 slf.__class__ = slf.__relaxed__
@@ -361,13 +362,13 @@ class _ContractedMethodFactory:
                     self.check_invariants(slf)
                 self.check_requires(slf, *args, **kwargs)
                 logger.debug(
-                    f".Core call %s.%s",
+                    ".Core call %s.%s",
                     slf.__class__.__name__, self._method_info.name)
                 ret = method(slf, *args, **kwargs)
                 self.check_ensures(slf, ret, old, *args, **kwargs)
                 self.check_invariants(slf)
                 slf.__class__ = slf.__contracted__
-            except AssertionError as e:
+            except AssertionError:
                 logger.exception("Assertion failed")
                 raise
             return ret
@@ -383,11 +384,11 @@ class _ContractedMethodFactory:
         if not self._invariants:
             return
 
-        logger.debug(f".Check invariants of %s: %s", slf, self._invariants)
+        logger.debug(".Check invariants of %s: %s", slf, self._invariants)
         for invariant in reversed(self._invariants):
             try:
                 invariant.value(slf)
-            except AssertionError as e:
+            except AssertionError:
                 logger.error("..Invariant %s: NOT OK", invariant)
                 raise
             else:
@@ -412,9 +413,9 @@ class _ContractedMethodFactory:
                 require.value(slf, *args, **kwargs)
             except AssertionError as e:
                 error = e
-                logger.error(f"..Require %s: NOT OK", require)
+                logger.error("..Require %s: NOT OK", require)
             else:
-                logger.debug(f"..Require %s: ok", require)
+                logger.debug("..Require %s: ok", require)
                 return
 
         raise error
@@ -428,7 +429,7 @@ class _ContractedMethodFactory:
         for ensure in reversed(self._method_info.ensures):
             try:
                 ensure.value(slf, ret, old, *args, **kwargs)
-            except AssertionError as e:
+            except AssertionError:
                 logger.error("..Ensure %s: NOT OK", ensure)
                 raise
             else:
