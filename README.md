@@ -1,6 +1,9 @@
 A toy project. Attempt to use dynamic nature of Python to implement 
 programming by contract.
 
+[![Python Toy Contract](https://github.com/jferard/python-toy-contract/actions/workflows/workflow.yml/badge.svg)](
+https://github.com/jferard/python-toy-contract/actions/workflows/workflow.yml)
+
 Despite being a toy project, the goal is to have a working implementation. But
 performance is less important than documentation.
 
