@@ -72,7 +72,7 @@ but preconditions may only be weakened:
 # Running the tests
 To run the tests of the Python version, you have to type:
 
-    python-toy-contract$ python3.7 -m pytest
+    python-toy-contract$ python3 -m pytest
     
 To run the test of the Eiffel version:
 
